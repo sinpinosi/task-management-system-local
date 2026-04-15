@@ -1,0 +1,353 @@
+/* ============================================================
+   タスク一覧 & フィルターバー
+   ============================================================ */
+
+/* ---- フィルターバー ---- */
+.filter-bar {
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.filter-bar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.filter-bar-header:hover { background: rgba(255, 255, 255, 0.03); }
+
+.filter-bar-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-active-count {
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.filter-body {
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.filter-body.collapsed { display: none; }
+
+.filter-group { display: flex; flex-direction: column; gap: 4px; }
+.filter-label { font-size: 0.72rem; font-weight: 600; color: var(--color-text-muted); }
+
+/* ---- フィルタードロップダウン ---- */
+.filter-dropdown {
+  position: relative;
+}
+
+.filter-dropdown-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.filter-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  margin-top: 4px;
+  padding: 4px 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.filter-dropdown.open .filter-dropdown-menu {
+  display: block;
+}
+
+.filter-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background var(--transition);
+}
+
+.filter-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.filter-dropdown-item input[type="checkbox"] {
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.filter-footer {
+  padding: 8px 14px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ---- タスクテーブル ---- */
+.task-table {
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.task-table table {
+  width: 100%;
+}
+
+.task-table thead tr {
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.task-table th {
+  padding: 10px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-align: left;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.task-table th.sortable { cursor: pointer; }
+.task-table th.sortable:hover { color: var(--color-text); }
+.task-table th .sort-icon { opacity: 0.4; }
+.task-table th.sorted .sort-icon { opacity: 1; color: var(--color-primary); }
+
+.task-table tbody tr {
+  border-bottom: 1px solid var(--color-border);
+  transition: background var(--transition);
+}
+
+.task-table tbody tr:last-child { border-bottom: none; }
+.task-table tbody tr:hover { background: var(--color-primary-light); }
+
+.task-table td {
+  padding: 10px 12px;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+/* タスク名セル */
+.task-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-indent {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.task-indent-line {
+  width: 16px;
+  height: 100%;
+  border-left: 2px solid var(--color-border);
+  border-bottom: 2px solid var(--color-border);
+  border-radius: 0 0 0 4px;
+  margin-right: 2px;
+  margin-top: -8px;
+  height: 16px;
+  display: inline-block;
+}
+
+.task-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  line-height: 1;
+  border-radius: 2px;
+  transition: background var(--transition);
+  flex-shrink: 0;
+}
+
+.task-toggle-btn:hover { background: rgba(255, 255, 255, 0.06); }
+
+.task-title-link {
+  cursor: pointer;
+  color: var(--color-text);
+  font-weight: 500;
+  transition: color var(--transition);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+  display: block;
+}
+
+.task-title-link:hover { color: var(--color-primary); }
+
+.task-overdue .task-title-link { color: var(--color-danger); }
+
+/* 期限セル */
+.due-date { font-size: 0.8rem; white-space: nowrap; }
+.due-date.overdue { color: var(--color-danger); font-weight: 500; }
+.due-date.soon { color: var(--color-warning); font-weight: 500; }
+
+/* タグセル */
+.tags-cell { display: flex; flex-wrap: wrap; gap: 3px; }
+
+/* アクションセル */
+.actions-cell {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.task-table tbody tr:hover .actions-cell { opacity: 1; }
+
+/* プロジェクトカラードット */
+.project-color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ---- タスク詳細 ---- */
+.task-detail-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .task-detail-layout { grid-template-columns: 1fr; }
+}
+
+.task-detail-main { min-width: 0; }
+.task-detail-side { display: flex; flex-direction: column; gap: 12px; }
+
+.task-detail-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.task-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.task-meta-item { display: flex; flex-direction: column; gap: 3px; }
+.task-meta-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.task-meta-value {
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.task-description {
+  font-size: 0.9rem;
+  color: var(--color-text);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 子タスクセクション */
+.subtask-section { margin-top: 24px; }
+.subtask-section .section-header { margin-bottom: 10px; }
+
+/* ---- プロジェクトグリッド ---- */
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.project-card {
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+
+.project-card:hover {
+  box-shadow: var(--shadow-md), var(--glow-primary);
+  border-color: rgba(99, 102, 241, 0.3);
+  transform: translateY(-1px);
+}
+
+.project-card-top {
+  height: 6px;
+}
+
+.project-card-body { padding: 14px; }
+.project-card-name { font-weight: 600; font-size: 0.95rem; margin-bottom: 4px; }
+.project-card-desc {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* READMEタブ */
+.proj-readme-tab.active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.project-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}

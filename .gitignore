@@ -1,0 +1,6 @@
+# データファイル (個人の入力データ)
+data/
+js/config.js
+
+# Claude Code
+.claude/

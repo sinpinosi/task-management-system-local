@@ -1,0 +1,13 @@
+{
+  "port": 7890,
+  "browser": "msedge",
+  "dataDir": "./data",
+  "dataPaths": {
+    "projects":  "./data",
+    "tasks":     "./data",
+    "templates": "./data",
+    "memos":     "./data",
+    "alarms":    "./data/personal",
+    "pomodoro":  "./data/personal"
+  }
+}

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>タスク管理ツール</title>
+  <link rel="stylesheet" href="css/reset.css">
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/task-list.css">
+  <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+  <style>
+    /* メモエディタのフォント */
+    :root { --font-mono: 'Consolas', 'Courier New', monospace; }
+
+    /* ポモドーロページのグリッドがモバイルで崩れないよう */
+    @media (max-width: 700px) {
+      #app { flex-direction: column; }
+      #sidebar { width: 100%; height: auto; flex-shrink: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+
+    <!-- ============ サイドバー ============ -->
+    <nav id="sidebar">
+      <div id="sidebar-logo">
+        <h1><span class="logo-icon"><i data-lucide="clipboard-list"></i></span> タスク管理</h1>
+      </div>
+
+      <!-- プロジェクト -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">プロジェクト</div>
+        <div id="sidebar-projects">
+          <!-- Projects.renderSidebar() で描画 -->
+        </div>
+        <button class="sidebar-new-btn" onclick="Projects.openModal()">＋ 新規プロジェクト</button>
+      </div>
+
+      <div class="sidebar-divider"></div>
+
+      <!-- ナビゲーション -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">メニュー</div>
+        <div class="sidebar-nav-item" data-route="/tasks" onclick="Router.navigate('/tasks')">
+          <span class="nav-icon"><i data-lucide="check-square"></i></span> タスク
+        </div>
+        <div class="sidebar-nav-item" data-route="/projects" onclick="Router.navigate('/projects')">
+          <span class="nav-icon"><i data-lucide="folder"></i></span> プロジェクト
+        </div>
+        <div class="sidebar-nav-item" data-route="/trash" onclick="Router.navigate('/trash')">
+          <span class="nav-icon"><i data-lucide="trash-2"></i></span> ゴミ箱
+        </div>
+        <div class="sidebar-nav-item" data-route="/archive" onclick="Router.navigate('/archive')">
+          <span class="nav-icon"><i data-lucide="archive"></i></span> アーカイブ
+        </div>
+      </div>
+
+      <div class="sidebar-divider"></div>
+
+      <!-- ツール -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">ツール</div>
+        <div class="sidebar-nav-item" data-route="/alarms" onclick="Router.navigate('/alarms')">
+          <span class="nav-icon"><i data-lucide="bell-ring"></i></span> アラーム
+        </div>
+        <div class="sidebar-nav-item" data-route="/pomodoro" onclick="Router.navigate('/pomodoro')">
+          <span class="nav-icon"><i data-lucide="timer"></i></span> ポモドーロ
+        </div>
+        <div class="sidebar-nav-item" data-route="/memos" onclick="Router.navigate('/memos')">
+          <span class="nav-icon"><i data-lucide="file-text"></i></span> メモ
+        </div>
+        <div class="sidebar-nav-item" data-route="/templates" onclick="Router.navigate('/templates')">
+          <span class="nav-icon"><i data-lucide="layout-template"></i></span> テンプレート
+        </div>
+      </div>
+
+      <!-- ポモドーロウィジェット（常時表示） -->
+      <div id="pomodoro-widget">
+        <!-- Pomodoro.renderWidget() で描画 -->
+      </div>
+    </nav>
+
+    <!-- ============ メインコンテンツ ============ -->
+    <div id="content">
+      <!-- サーバー未起動バナー -->
+      <div id="server-banner" class="hidden">
+        <i data-lucide="alert-triangle" style="width:16px;height:16px"></i> サーバーが起動していません。<strong>起動.bat</strong> を実行してください。
+        <button onclick="App.retryConnection()">再接続</button>
+      </div>
+
+      <!-- ページコンテンツ -->
+      <div id="page" style="padding:24px">
+        <div class="loading"><div class="spinner"></div> 起動中…</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- モーダルオーバーレイ -->
+  <div id="modal-overlay" class="hidden">
+    <div id="modal-box"></div>
+  </div>
+
+  <!-- トーストコンテナ -->
+  <div id="toast-container"></div>
+
+  <!-- ============ スクリプト読み込み（依存順） ============ -->
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/router.js"></script>
+  <script src="js/projects.js"></script>
+  <script src="js/filters.js"></script>
+  <script src="js/tasks.js"></script>
+  <script src="js/trash.js"></script>
+  <script src="js/archive.js"></script>
+  <script src="js/alarm.js"></script>
+  <script src="js/pomodoro.js"></script>
+  <script src="js/templates.js"></script>
+  <script src="js/memo.js"></script>
+
+  <script>
+    /* ============================================================
+       App — 初期化
+       ============================================================ */
+    const App = {
+      async init() {
+        // サーバー接続確認
+        const ok = await this.checkServer();
+
+        if (ok) {
+          try {
+            await Store.loadAll();
+          } catch (e) {
+            console.warn('データ読み込み失敗:', e);
+          }
+        }
+
+        // ルーター登録
+        Router.register('/tasks',    (segs) => segs.length ? Tasks.renderDetail(segs) : Tasks.renderList());
+        Router.register('/projects', (segs) => segs.length ? Projects.renderDetail(segs) : Projects.renderList());
+        Router.register('/trash',    ()     => Trash.render());
+        Router.register('/archive',  ()     => Archive.render());
+        Router.register('/alarms',   ()     => Alarm.render());
+        Router.register('/pomodoro', ()     => Pomodoro.render());
+        Router.register('/memos',    (segs) => segs.length ? Memo.renderDetail(segs) : Memo.renderList());
+        Router.register('/templates', ()    => Templates.renderList());
+
+        // サイドバー
+        Projects.renderSidebar();
+
+        // ポモドーロ初期化
+        await Pomodoro.init();
+
+        // ルーター起動
+        Router.init();
+      },
+
+      async checkServer() {
+        try {
+          await Api.ping();
+          document.getElementById('server-banner').classList.add('hidden');
+          return true;
+        } catch (e) {
+          document.getElementById('server-banner').classList.remove('hidden');
+          document.getElementById('page').innerHTML = `
+            <div class="empty-state" style="padding:60px 24px">
+              <div class="empty-icon">${Utils.icon('alert-triangle', 40)}</div>
+              <div class="empty-title">サーバーが起動していません</div>
+              <div class="empty-desc" style="margin-bottom:16px">
+                <strong>起動.bat</strong> をダブルクリックして起動してください。<br>
+                すでに起動している場合は「再接続」ボタンを押してください。
+              </div>
+              <button class="btn btn-primary" onclick="App.retryConnection()">${Utils.icon('refresh-cw')} 再接続</button>
+            </div>
+          `;
+          return false;
+        }
+      },
+
+      async retryConnection() {
+        document.getElementById('page').innerHTML = '<div class="loading"><div class="spinner"></div> 接続中…</div>';
+        const ok = await this.checkServer();
+        if (ok) {
+          try {
+            await Store.loadAll();
+            Projects.renderSidebar();
+            await Pomodoro.init();
+            Router.render();
+            Toast.show('サーバーに接続しました', 'success');
+          } catch (e) {
+            Toast.show('接続エラー: ' + e.message, 'error');
+          }
+        }
+      }
+    };
+
+    // 起動
+    App.init().then(() => Utils.refreshIcons());
+    // 初期サイドバーアイコン描画
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  </script>
+</body>
+</html>
