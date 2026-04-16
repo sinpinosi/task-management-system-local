@@ -2,5 +2,8 @@
 data/
 js/config.js
 
+# スクリーンショットツール
+screenshots/
+
 # Claude Code
 .claude/

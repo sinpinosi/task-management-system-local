@@ -50,17 +50,29 @@ const Tasks = (() => {
 
     const rows = renderRows(roots, filtered, 0);
 
+    function renderSortTh(label, key, width) {
+      const st = Filters.getState();
+      const isSorted = st.sortKey === key;
+      const cls = 'sortable' + (isSorted ? ' sorted' : '');
+      const icon = isSorted
+        ? Utils.icon(st.sortDir === 'asc' ? 'arrow-up' : 'arrow-down', 12)
+        : Utils.icon('arrow-up-down', 12);
+      const style = width ? ` style="width:${width}"` : '';
+      return `<th class="${cls}" onclick="Filters.toggleSort('${key}')"${style}>${label} <span class="sort-icon">${icon}</span></th>`;
+    }
+
     return `
       <table>
         <thead>
           <tr>
-            <th style="width:40%">タイトル</th>
-            <th>状態</th>
-            <th>優先度</th>
-            <th>担当者</th>
-            <th>期限</th>
+            <th style="width:32px"></th>
+            ${renderSortTh('タイトル', 'title', '35%')}
+            ${renderSortTh('状態', 'status')}
+            ${renderSortTh('優先度', 'priority')}
+            ${renderSortTh('担当者', 'assignee')}
+            ${renderSortTh('期限', 'dueDate')}
             <th>タグ</th>
-            <th>プロジェクト</th>
+            ${renderSortTh('プロジェクト', 'projectId')}
             <th style="width:80px"></th>
           </tr>
         </thead>
@@ -94,7 +106,15 @@ const Tasks = (() => {
     const dotColor = project?.color || '#94a3b8';
 
     return `
-      <tr${rowCls} id="task-row-${t.id}">
+      <tr${rowCls} id="task-row-${t.id}" data-task-id="${t.id}" data-parent-id="${t.parentId || ''}" draggable="true"
+          ondragstart="Tasks._onDragStart(event, '${t.id}')"
+          ondragover="Tasks._onDragOver(event, '${t.id}')"
+          ondragleave="Tasks._onDragLeave(event)"
+          ondrop="Tasks._onDrop(event, '${t.id}')"
+          ondragend="Tasks._onDragEnd(event)">
+        <td class="drag-handle-cell">
+          <span class="drag-handle" title="ドラッグで並び替え">${Utils.icon('grip-vertical', 14)}</span>
+        </td>
         <td>
           <div class="task-name-cell" style="padding-left:${indent}px">
             ${depth > 0 ? `<span class="task-indent-line"></span>` : ''}
@@ -185,7 +205,7 @@ const Tasks = (() => {
               <div class="task-table">
                 <table>
                   <thead><tr>
-                    <th>タイトル</th><th>状態</th><th>優先度</th><th>担当者</th><th>期限</th><th></th>
+                    <th style="width:28px"></th><th>タイトル</th><th>状態</th><th>優先度</th><th>担当者</th><th>期限</th><th></th>
                   </tr></thead>
                   <tbody>
                     ${children.map(c => renderRow(c, 0)).join('')}
@@ -392,9 +412,107 @@ const Tasks = (() => {
     }
   }
 
+  // ---- ドラッグ&ドロップ ----
+  let _dragTaskId = null;
+
+  function _onDragStart(e, taskId) {
+    _dragTaskId = taskId;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', taskId);
+    const row = document.getElementById('task-row-' + taskId);
+    if (row) setTimeout(() => row.classList.add('dragging'), 0);
+  }
+
+  function _onDragOver(e, targetId) {
+    if (!_dragTaskId || _dragTaskId === targetId) return;
+    const dragTask = Store.getTaskById(_dragTaskId);
+    const targetTask = Store.getTaskById(targetId);
+    if (!dragTask || !targetTask) return;
+    // 同じ階層のタスク間のみ許可
+    if ((dragTask.parentId || '') !== (targetTask.parentId || '')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    // ドロップ位置のハイライト
+    const row = e.currentTarget;
+    const rect = row.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    row.classList.remove('drag-over-top', 'drag-over-bottom');
+    if (e.clientY < midY) {
+      row.classList.add('drag-over-top');
+    } else {
+      row.classList.add('drag-over-bottom');
+    }
+  }
+
+  function _onDragLeave(e) {
+    const row = e.currentTarget;
+    row.classList.remove('drag-over-top', 'drag-over-bottom');
+  }
+
+  async function _onDrop(e, targetId) {
+    e.preventDefault();
+    const row = e.currentTarget;
+    row.classList.remove('drag-over-top', 'drag-over-bottom');
+    if (!_dragTaskId || _dragTaskId === targetId) return;
+
+    const dragTask = Store.getTaskById(_dragTaskId);
+    const targetTask = Store.getTaskById(targetId);
+    if (!dragTask || !targetTask) return;
+    if ((dragTask.parentId || '') !== (targetTask.parentId || '')) return;
+
+    // 同じ親の兄弟タスクを取得して sortOrder 順にソート
+    const parentId = dragTask.parentId || null;
+    const allTasks = Store.getTasks();
+    const siblings = allTasks
+      .filter(t => (t.parentId || null) === parentId)
+      .sort((a, b) => (a.sortOrder ?? 999999) - (b.sortOrder ?? 999999));
+
+    // ドラッグ元を除外した配列を作成
+    const withoutDrag = siblings.filter(t => t.id !== _dragTaskId);
+
+    // ドロップ先のインデックスを決定
+    const rect = row.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const insertBefore = e.clientY < midY;
+    let insertIdx = withoutDrag.findIndex(t => t.id === targetId);
+    if (!insertBefore) insertIdx++;
+
+    // 新しい順序に挿入
+    withoutDrag.splice(insertIdx, 0, dragTask);
+
+    // sortOrder を再割り当て
+    const updates = withoutDrag.map((t, i) => ({ id: t.id, sortOrder: i }));
+
+    try {
+      await Store.reorderTasks(updates);
+      // ソートキーが手動順の場合のみ自動でテーブルを再描画
+      const wrap = document.getElementById('task-table-wrap');
+      if (wrap) {
+        const all2 = Store.getTasks();
+        const filt2 = Filters.apply(all2);
+        const roots2 = filt2.filter(t => !t.parentId);
+        wrap.innerHTML = renderTable(filt2, roots2);
+        Utils.refreshIcons();
+      }
+    } catch (err) {
+      Toast.show('並び替え失敗: ' + err.message, 'error');
+    }
+
+    _dragTaskId = null;
+  }
+
+  function _onDragEnd(e) {
+    _dragTaskId = null;
+    document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+    document.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(el => {
+      el.classList.remove('drag-over-top', 'drag-over-bottom');
+    });
+  }
+
   return {
     renderList, renderDetail,
     openModal, _save,
-    confirmDelete, _archiveTask
+    confirmDelete, _archiveTask,
+    _onDragStart, _onDragOver, _onDragLeave, _onDrop, _onDragEnd
   };
 })();

@@ -80,6 +80,14 @@ const Store = (() => {
     _projects = _projects.filter(x => x.id !== id);
   }
 
+  async function reorderProjects(items) {
+    await Api.reorderProjects(items);
+    for (const {id, sortOrder} of items) {
+      const p = _projects.find(x => x.id === id);
+      if (p) p.sortOrder = sortOrder;
+    }
+  }
+
   function getProjectById(id) {
     return _projects.find(p => p.id === id) || null;
   }
@@ -177,6 +185,14 @@ const Store = (() => {
     }
   }
 
+  async function reorderTasks(items) {
+    await Api.reorderTasks(items);
+    for (const {id, sortOrder} of items) {
+      const t = _tasks.find(x => x.id === id);
+      if (t) t.sortOrder = sortOrder;
+    }
+  }
+
   function getDeletedTasks() {
     return _tasks.filter(t => t.deleted);
   }
@@ -188,6 +204,14 @@ const Store = (() => {
   // ---- Templates ----
   function getTemplates() { return [..._templates]; }
   function getTemplateById(id) { return _templates.find(t => t.id === id) || null; }
+
+  async function reorderTemplates(items) {
+    await Api.reorderTemplates(items);
+    for (const {id, sortOrder} of items) {
+      const t = _templates.find(x => x.id === id);
+      if (t) t.sortOrder = sortOrder;
+    }
+  }
 
   async function createTemplate(data) {
     const t = await Api.createTemplate(data);
@@ -279,14 +303,14 @@ const Store = (() => {
     loadAll,
     // projects
     getProjects, getDeletedProjects, createProject, updateProject,
-    softDeleteProject, restoreProject, permanentDeleteProject, getProjectById,
+    softDeleteProject, restoreProject, permanentDeleteProject, reorderProjects, getProjectById,
     // tasks
     getTasks, getTaskById, getChildren, getDescendants,
     createTask, updateTask, softDeleteTask, restoreTask,
     archiveTask, unarchiveTask, permanentDeleteTask,
-    getDeletedTasks, getArchivedTasks,
+    reorderTasks, getDeletedTasks, getArchivedTasks,
     // templates
-    getTemplates, getTemplateById, createTemplate, updateTemplate, deleteTemplate,
+    getTemplates, getTemplateById, createTemplate, updateTemplate, deleteTemplate, reorderTemplates,
     // alarms
     getAlarms, createAlarm, updateAlarm, deleteAlarm,
     // memos

@@ -340,6 +340,7 @@ function Handle-Request {
         if ($resource -eq "projects") {
             if     ($method -eq "GET")    { Api-GetAll    $res $ProjectsFile }
             elseif ($method -eq "POST")   { Api-Create    $res $ProjectsFile $req "proj" }
+            elseif ($method -eq "PUT" -and $id -eq "reorder") { Api-ReorderItems $res $req $ProjectsFile }
             elseif ($method -eq "PUT")    { Api-Update    $res $ProjectsFile $req $id }
             elseif ($method -eq "DELETE") { Api-Delete    $res $ProjectsFile $id }
             else   { Send-Response -Response $res -StatusCode 405 -Body '{"error":"Method Not Allowed"}' }
@@ -349,6 +350,7 @@ function Handle-Request {
         if ($resource -eq "tasks") {
             if     ($method -eq "GET")    { Api-GetAll      $res $TasksFile }
             elseif ($method -eq "POST")   { Api-CreateTask  $res $req }
+            elseif ($method -eq "PUT" -and $id -eq "reorder") { Api-ReorderTasks $res $req }
             elseif ($method -eq "PUT")    { Api-UpdateTask  $res $req $id }
             elseif ($method -eq "DELETE") { Api-Delete      $res $TasksFile $id }
             else   { Send-Response -Response $res -StatusCode 405 -Body '{"error":"Method Not Allowed"}' }
@@ -376,6 +378,7 @@ function Handle-Request {
         if ($resource -eq "templates") {
             if     ($method -eq "GET")    { Api-GetAll  $res $TemplatesFile }
             elseif ($method -eq "POST")   { Api-Create  $res $TemplatesFile $req "tmpl" }
+            elseif ($method -eq "PUT" -and $id -eq "reorder") { Api-ReorderItems $res $req $TemplatesFile }
             elseif ($method -eq "PUT")    { Api-Update  $res $TemplatesFile $req $id }
             elseif ($method -eq "DELETE") { Api-Delete  $res $TemplatesFile $id }
             else   { Send-Response -Response $res -StatusCode 405 -Body '{"error":"Method Not Allowed"}' }
@@ -484,6 +487,18 @@ function Api-CreateTask {
         if (-not ($body.PSObject.Properties.Name -contains "deleted"))   { $body | Add-Member -Force -NotePropertyName "deleted"   -NotePropertyValue $false }
         if (-not ($body.PSObject.Properties.Name -contains "archived"))  { $body | Add-Member -Force -NotePropertyName "archived"  -NotePropertyValue $false }
 
+        # sortOrder のデフォルト値: 既存タスクの最大値 + 1
+        if (-not ($body.PSObject.Properties.Name -contains "sortOrder")) {
+            $maxOrder = -1
+            foreach ($t in $list) {
+                if ($t.PSObject.Properties.Name -contains "sortOrder") {
+                    $v = [int]$t.sortOrder
+                    if ($v -gt $maxOrder) { $maxOrder = $v }
+                }
+            }
+            $body | Add-Member -Force -NotePropertyName "sortOrder" -NotePropertyValue ($maxOrder + 1)
+        }
+
         $parentId = ""
         if ($body.PSObject.Properties.Name -contains "parentId") { $parentId = $body.parentId }
 
@@ -508,6 +523,67 @@ function Api-CreateTask {
         Release-DataLock
     }
     Send-JsonResponse -Response $Response -Data $body -StatusCode 201
+}
+
+function Api-ReorderTasks {
+    param($Response, $Request)
+    $body = Get-RequestBody $Request
+    if ($null -eq $body) { Send-Response -Response $Response -StatusCode 400 -Body '{"error":"Bad Request"}'; return }
+    Acquire-DataLock
+    try {
+        $list = Get-JsonArray $TasksFile
+        $now  = Get-Date -Format "o"
+        # body は [{id, sortOrder}, ...] の配列
+        $items = @()
+        if ($body -is [System.Array]) { $items = $body }
+        elseif ($body -is [System.Collections.IEnumerable]) { $items = @($body) }
+        else { $items = @($body) }
+        foreach ($item in $items) {
+            $tid = $item.id
+            $ord = [int]$item.sortOrder
+            for ($i = 0; $i -lt $list.Count; $i++) {
+                if ($list[$i].id -eq $tid) {
+                    $list[$i] | Add-Member -Force -NotePropertyName "sortOrder" -NotePropertyValue $ord
+                    $list[$i] | Add-Member -Force -NotePropertyName "updatedAt" -NotePropertyValue $now
+                    break
+                }
+            }
+        }
+        Write-JsonArray $TasksFile $list
+    } finally {
+        Release-DataLock
+    }
+    Send-JsonResponse -Response $Response -Data @{ ok = $true }
+}
+
+function Api-ReorderItems {
+    param($Response, $Request, [string]$File)
+    $body = Get-RequestBody $Request
+    if ($null -eq $body) { Send-Response -Response $Response -StatusCode 400 -Body '{"error":"Bad Request"}'; return }
+    Acquire-DataLock
+    try {
+        $list = Get-JsonArray $File
+        $now  = Get-Date -Format "o"
+        $items = @()
+        if ($body -is [System.Array]) { $items = $body }
+        elseif ($body -is [System.Collections.IEnumerable]) { $items = @($body) }
+        else { $items = @($body) }
+        foreach ($item in $items) {
+            $tid = $item.id
+            $ord = [int]$item.sortOrder
+            for ($i = 0; $i -lt $list.Count; $i++) {
+                if ($list[$i].id -eq $tid) {
+                    $list[$i] | Add-Member -Force -NotePropertyName "sortOrder" -NotePropertyValue $ord
+                    $list[$i] | Add-Member -Force -NotePropertyName "updatedAt" -NotePropertyValue $now
+                    break
+                }
+            }
+        }
+        Write-JsonArray $File $list
+    } finally {
+        Release-DataLock
+    }
+    Send-JsonResponse -Response $Response -Data @{ ok = $true }
 }
 
 function Api-UpdateTask {

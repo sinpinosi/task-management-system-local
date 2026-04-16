@@ -12,7 +12,7 @@ const Projects = (() => {
   function renderSidebar() {
     const el = document.getElementById('sidebar-projects');
     if (!el) return;
-    const projects = Store.getProjects();
+    const projects = _sortedProjects(Store.getProjects());
     if (!projects.length) {
       el.innerHTML = `<div style="padding:4px 16px;font-size:0.75rem;opacity:0.4;">プロジェクトなし</div>`;
       return;
@@ -51,22 +51,77 @@ const Projects = (() => {
         </div>
       ` : `
         <div class="project-grid" id="project-grid">
-          ${projects.map(p => renderCard(p)).join('')}
+          ${_sortedProjects(projects).map(p => renderCard(p)).join('')}
         </div>
       `}
     `;
   }
 
+  function _sortedProjects(projects) {
+    return [...projects].sort((a, b) => (a.sortOrder ?? 999999) - (b.sortOrder ?? 999999));
+  }
+
+  function _sortedByOrder(items) {
+    return [...items].sort((a, b) => (a.sortOrder ?? 999999) - (b.sortOrder ?? 999999));
+  }
+
+  function _renderProjectTaskRows(allTasks, projectId) {
+    const roots = _sortedByOrder(allTasks.filter(t => !t.parentId));
+    return _renderHierarchicalRows(roots, allTasks, 0, projectId);
+  }
+
+  function _renderHierarchicalRows(tasks, allTasks, depth, projectId) {
+    return tasks.map(t => {
+      const children = _sortedByOrder(allTasks.filter(c => c.parentId === t.id));
+      const row = _renderProjectTaskRow(t, depth, projectId);
+      const childRows = children.length > 0 ? _renderHierarchicalRows(children, allTasks, depth + 1, projectId) : '';
+      return row + childRows;
+    }).join('');
+  }
+
+  function _renderProjectTaskRow(t, depth, projectId) {
+    const overdue = Utils.isOverdue(t.dueDate);
+    const soon = !overdue && Utils.isDueSoon(t.dueDate);
+    const dueCls = overdue ? ' overdue' : (soon ? ' soon' : '');
+    const indent = depth * 20;
+    return `<tr data-task-id="${t.id}" data-parent-id="${t.parentId || ''}" draggable="true"
+      ondragstart="Projects._onTaskDragStart(event, '${t.id}')"
+      ondragover="Projects._onTaskDragOver(event, '${t.id}')"
+      ondragleave="Projects._onTaskDragLeave(event)"
+      ondrop="Projects._onTaskDrop(event, '${t.id}', '${projectId}')"
+      ondragend="Projects._onTaskDragEnd(event)"
+      style="cursor:pointer">
+      <td class="drag-handle-cell"><span class="drag-handle" onclick="event.stopPropagation()" title="ドラッグで並び替え">${Utils.icon('grip-vertical', 14)}</span></td>
+      <td onclick="Router.navigate('/tasks/${t.id}')">
+        <div class="task-name-cell" style="padding-left:${indent}px">
+          ${depth > 0 ? '<span class="task-indent-line"></span>' : ''}
+          <span class="task-title-link">${Utils.escapeHtml(t.title)}</span>
+        </div>
+      </td>
+      <td><span class="badge badge-${t.status}">${Utils.statusLabel(t.status)}</span></td>
+      <td><span class="badge badge-${t.priority}">${Utils.priorityLabel(t.priority)}</span></td>
+      <td style="font-size:0.8rem;color:var(--color-text-muted)">${Utils.escapeHtml(t.assignee || '—')}</td>
+      <td><span class="due-date${dueCls}">${t.dueDate ? Utils.formatDate(t.dueDate) : '—'}</span></td>
+    </tr>`;
+  }
+
   function renderCard(p) {
     const taskCount = Store.getTasks().filter(t => t.projectId === p.id).length;
     return `
-      <div class="project-card" onclick="Router.navigate('/projects/${p.id}')">
+      <div class="project-card" data-project-id="${p.id}" draggable="true"
+           ondragstart="Projects._onDragStart(event, '${p.id}')"
+           ondragover="Projects._onDragOver(event, '${p.id}')"
+           ondragleave="Projects._onDragLeave(event)"
+           ondrop="Projects._onDrop(event, '${p.id}')"
+           ondragend="Projects._onDragEnd(event)"
+           onclick="Router.navigate('/projects/${p.id}')">
         <div class="project-card-top" style="background:${Utils.escapeHtml(p.color || '#3b82f6')}"></div>
         <div class="project-card-body">
           <div class="project-card-name">${Utils.escapeHtml(p.name)}</div>
           ${p.description ? `<div class="project-card-desc">${Utils.escapeHtml(p.description)}</div>` : ''}
         </div>
         <div class="project-card-footer">
+          <span class="drag-handle" title="ドラッグで並び替え" onclick="event.stopPropagation()">${Utils.icon('grip-vertical', 14)}</span>
           <span>タスク ${taskCount}件</span>
           <div onclick="event.stopPropagation()" style="display:flex;gap:4px">
             <button class="btn btn-ghost btn-sm btn-icon" onclick="Projects.openModal('${p.id}')" title="編集">${Utils.icon('pencil')}</button>
@@ -313,6 +368,7 @@ const Projects = (() => {
             : `<table class="task-table" style="border:none">
                 <thead>
                   <tr>
+                    <th style="width:28px"></th>
                     <th style="width:40%">タイトル</th>
                     <th>状態</th>
                     <th>優先度</th>
@@ -320,19 +376,8 @@ const Projects = (() => {
                     <th>期限</th>
                   </tr>
                 </thead>
-                <tbody>
-                  ${tasks.map(t => {
-                    const overdue = Utils.isOverdue(t.dueDate);
-                    const soon = !overdue && Utils.isDueSoon(t.dueDate);
-                    const dueCls = overdue ? ' overdue' : (soon ? ' soon' : '');
-                    return `<tr style="cursor:pointer" onclick="Router.navigate('/tasks/${t.id}')">
-                      <td><span class="task-title-link">${Utils.escapeHtml(t.title)}</span></td>
-                      <td><span class="badge badge-${t.status}">${Utils.statusLabel(t.status)}</span></td>
-                      <td><span class="badge badge-${t.priority}">${Utils.priorityLabel(t.priority)}</span></td>
-                      <td style="font-size:0.8rem;color:var(--color-text-muted)">${Utils.escapeHtml(t.assignee || '—')}</td>
-                      <td><span class="due-date${dueCls}">${t.dueDate ? Utils.formatDate(t.dueDate) : '—'}</span></td>
-                    </tr>`;
-                  }).join('')}
+                <tbody id="proj-task-tbody">
+                  ${_renderProjectTaskRows(tasks, id)}
                 </tbody>
               </table>`
           }
@@ -397,10 +442,144 @@ const Projects = (() => {
     }
   }
 
+  // ---- プロジェクト詳細ページ内タスクのドラッグ&ドロップ ----
+  let _dragTaskId = null;
+
+  function _onTaskDragStart(e, taskId) {
+    _dragTaskId = taskId;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', taskId);
+    const row = e.currentTarget;
+    setTimeout(() => row.classList.add('dragging'), 0);
+  }
+
+  function _onTaskDragOver(e, targetId) {
+    if (!_dragTaskId || _dragTaskId === targetId) return;
+    const dragTask = Store.getTaskById(_dragTaskId);
+    const targetTask = Store.getTaskById(targetId);
+    if (!dragTask || !targetTask) return;
+    // 同じ階層のタスク間のみ許可
+    if ((dragTask.parentId || '') !== (targetTask.parentId || '')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const row = e.currentTarget;
+    const rect = row.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    row.classList.remove('drag-over-top', 'drag-over-bottom');
+    row.classList.add(e.clientY < midY ? 'drag-over-top' : 'drag-over-bottom');
+  }
+
+  function _onTaskDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over-top', 'drag-over-bottom');
+  }
+
+  async function _onTaskDrop(e, targetId, projectId) {
+    e.preventDefault();
+    const row = e.currentTarget;
+    row.classList.remove('drag-over-top', 'drag-over-bottom');
+    if (!_dragTaskId || _dragTaskId === targetId) return;
+
+    const dragTask = Store.getTaskById(_dragTaskId);
+    const targetTask = Store.getTaskById(targetId);
+    if (!dragTask || !targetTask) return;
+    if ((dragTask.parentId || '') !== (targetTask.parentId || '')) return;
+
+    // 同じ親の兄弟タスクのみ対象
+    const parentId = dragTask.parentId || null;
+    const allProjectTasks = Store.getTasks().filter(t => t.projectId === projectId);
+    const siblings = _sortedByOrder(allProjectTasks.filter(t => (t.parentId || null) === parentId));
+    const withoutDrag = siblings.filter(t => t.id !== _dragTaskId);
+
+    const rect = row.getBoundingClientRect();
+    const insertBefore = e.clientY < rect.top + rect.height / 2;
+    let insertIdx = withoutDrag.findIndex(t => t.id === targetId);
+    if (!insertBefore) insertIdx++;
+    withoutDrag.splice(insertIdx, 0, dragTask);
+
+    const updates = withoutDrag.map((t, i) => ({ id: t.id, sortOrder: i }));
+    try {
+      await Store.reorderTasks(updates);
+      renderDetail([projectId]);
+    } catch (err) {
+      Toast.show('並び替え失敗: ' + err.message, 'error');
+    }
+    _dragTaskId = null;
+  }
+
+  function _onTaskDragEnd(e) {
+    _dragTaskId = null;
+    document.querySelectorAll('#proj-task-tbody tr.dragging').forEach(el => el.classList.remove('dragging'));
+    document.querySelectorAll('#proj-task-tbody tr.drag-over-top, #proj-task-tbody tr.drag-over-bottom').forEach(el => {
+      el.classList.remove('drag-over-top', 'drag-over-bottom');
+    });
+  }
+
+  // ---- プロジェクトカードのドラッグ&ドロップ ----
+  let _dragId = null;
+
+  function _onDragStart(e, id) {
+    _dragId = id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+    const card = e.currentTarget;
+    setTimeout(() => card.classList.add('dragging'), 0);
+  }
+
+  function _onDragOver(e, targetId) {
+    if (!_dragId || _dragId === targetId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const card = e.currentTarget;
+    const rect = card.getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    card.classList.remove('drag-over-left', 'drag-over-right');
+    card.classList.add(e.clientX < midX ? 'drag-over-left' : 'drag-over-right');
+  }
+
+  function _onDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over-left', 'drag-over-right');
+  }
+
+  async function _onDrop(e, targetId) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over-left', 'drag-over-right');
+    if (!_dragId || _dragId === targetId) return;
+
+    const projects = _sortedProjects(Store.getProjects());
+    const withoutDrag = projects.filter(p => p.id !== _dragId);
+    const dragItem = projects.find(p => p.id === _dragId);
+    if (!dragItem) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const insertBefore = e.clientX < rect.left + rect.width / 2;
+    let insertIdx = withoutDrag.findIndex(p => p.id === targetId);
+    if (!insertBefore) insertIdx++;
+    withoutDrag.splice(insertIdx, 0, dragItem);
+
+    const updates = withoutDrag.map((p, i) => ({ id: p.id, sortOrder: i }));
+    try {
+      await Store.reorderProjects(updates);
+      renderList();
+    } catch (err) {
+      Toast.show('並び替え失敗: ' + err.message, 'error');
+    }
+    _dragId = null;
+  }
+
+  function _onDragEnd(e) {
+    _dragId = null;
+    document.querySelectorAll('.project-card.dragging').forEach(el => el.classList.remove('dragging'));
+    document.querySelectorAll('.project-card.drag-over-left, .project-card.drag-over-right').forEach(el => {
+      el.classList.remove('drag-over-left', 'drag-over-right');
+    });
+  }
+
   return {
     renderSidebar, renderList, renderDetail, openModal,
     _filterByProject, _selectColor, _selectColorCustom, _onTemplateChange, _save,
     _switchReadmeTab, _scheduleReadmeSave,
-    archive, confirmDelete
+    archive, confirmDelete,
+    _onTaskDragStart, _onTaskDragOver, _onTaskDragLeave, _onTaskDrop, _onTaskDragEnd,
+    _onDragStart, _onDragOver, _onDragLeave, _onDrop, _onDragEnd
   };
 })();

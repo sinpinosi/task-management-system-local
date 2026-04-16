@@ -36,12 +36,14 @@ const Api = (() => {
     createProject(d)    { return request('POST',   '/projects', d); },
     updateProject(id,d) { return request('PUT',    `/projects/${id}`, d); },
     deleteProject(id)   { return request('DELETE', `/projects/${id}`); },
+    reorderProjects(items) { return request('PUT', '/projects/reorder', items); },
 
     // Tasks
     getTasks()          { return request('GET',    '/tasks'); },
     createTask(d)       { return request('POST',   '/tasks', d); },
     updateTask(id, d)   { return request('PUT',    `/tasks/${id}`, d); },
     deleteTask(id)      { return request('DELETE', `/tasks/${id}`); },
+    reorderTasks(items) { return request('PUT',    '/tasks/reorder', items); },
 
     // Alarms
     getAlarms()         { return request('GET',    '/alarms'); },
@@ -60,6 +62,7 @@ const Api = (() => {
     createTemplate(d)    { return request('POST',   '/templates', d); },
     updateTemplate(id,d) { return request('PUT',    `/templates/${id}`, d); },
     deleteTemplate(id)   { return request('DELETE', `/templates/${id}`); },
+    reorderTemplates(items) { return request('PUT', '/templates/reorder', items); },
 
     // Members
     getMembers()        { return request('GET',    '/members'); },

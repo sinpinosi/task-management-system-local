@@ -144,10 +144,21 @@
   user-select: none;
 }
 
-.task-table th.sortable { cursor: pointer; }
+.task-table th.sortable { cursor: pointer; user-select: none; }
 .task-table th.sortable:hover { color: var(--color-text); }
-.task-table th .sort-icon { opacity: 0.4; }
+.task-table th .sort-icon { opacity: 0.4; margin-left: 4px; }
 .task-table th.sorted .sort-icon { opacity: 1; color: var(--color-primary); }
+
+/* ドラッグハンドル */
+.drag-handle-cell { width: 28px; padding: 0 4px !important; text-align: center; }
+.drag-handle { cursor: grab; color: var(--color-text-light); opacity: 0.3; display: inline-flex; align-items: center; }
+.drag-handle:hover { opacity: 1; color: var(--color-text-muted); }
+
+/* ドラッグ中のスタイル */
+.task-table tbody tr[draggable="true"] { cursor: default; }
+.task-table tbody tr.dragging { opacity: 0.3; }
+.task-table tbody tr.drag-over-top { box-shadow: inset 0 2px 0 0 var(--color-primary); }
+.task-table tbody tr.drag-over-bottom { box-shadow: inset 0 -2px 0 0 var(--color-primary); }
 
 .task-table tbody tr {
   border-bottom: 1px solid var(--color-border);
@@ -321,6 +332,9 @@
   border-color: rgba(99, 102, 241, 0.3);
   transform: translateY(-1px);
 }
+.project-card.dragging { opacity: 0.3; }
+.project-card.drag-over-left { box-shadow: inset 3px 0 0 0 var(--color-primary); }
+.project-card.drag-over-right { box-shadow: inset -3px 0 0 0 var(--color-primary); }
 
 .project-card-top {
   height: 6px;

@@ -12,8 +12,8 @@ const Filters = (() => {
     dueBefore:   '',
     dueAfter:    '',
     searchText:  '',
-    sortKey:     'createdAt',
-    sortDir:     'desc'
+    sortKey:     'sortOrder',
+    sortDir:     'asc'
   };
 
   let _collapsed = false;
@@ -30,7 +30,7 @@ const Filters = (() => {
     _state = {
       projectId: null, status: [], priority: [], tags: [],
       assignee: '', dueBefore: '', dueAfter: '', searchText: '',
-      sortKey: 'createdAt', sortDir: 'desc'
+      sortKey: 'sortOrder', sortDir: 'asc'
     };
     if (_onChangeCallback) _onChangeCallback();
   }
@@ -94,6 +94,8 @@ const Filters = (() => {
     return result;
   }
 
+  const STATUS_ORDER = { open: 0, in_progress: 1, resolved: 2, closed: 3 };
+
   function sortTasks(tasks, key, dir) {
     return [...tasks].sort((a, b) => {
       let av = a[key] ?? '';
@@ -102,13 +104,30 @@ const Filters = (() => {
       if (key === 'priority') {
         av = Utils.PRIORITY_ORDER[av] ?? 99;
         bv = Utils.PRIORITY_ORDER[bv] ?? 99;
+      } else if (key === 'status') {
+        av = STATUS_ORDER[av] ?? 99;
+        bv = STATUS_ORDER[bv] ?? 99;
+      } else if (key === 'sortOrder') {
+        av = av !== '' && av !== null && av !== undefined ? Number(av) : 999999;
+        bv = bv !== '' && bv !== null && bv !== undefined ? Number(bv) : 999999;
       }
 
       let cmp = 0;
-      if (typeof av === 'string') cmp = av.localeCompare(bv, 'ja');
+      if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv;
+      else if (typeof av === 'string') cmp = av.localeCompare(bv, 'ja');
       else cmp = av < bv ? -1 : av > bv ? 1 : 0;
       return dir === 'asc' ? cmp : -cmp;
     });
+  }
+
+  function toggleSort(key) {
+    if (_state.sortKey === key) {
+      _state.sortDir = _state.sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      _state.sortKey = key;
+      _state.sortDir = 'asc';
+    }
+    if (_onChangeCallback) _onChangeCallback();
   }
 
   // ---- マルチセレクトドロップダウン描画 ----
@@ -277,7 +296,7 @@ const Filters = (() => {
 
   return {
     getState, setState, reset, onFilterChange,
-    countActive, apply,
+    countActive, apply, toggleSort,
     renderBar, collectTags,
     _toggle, _toggleDropdown, _onSearch, _onChange, _clear
   };

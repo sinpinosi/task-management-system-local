@@ -6,13 +6,35 @@ Windows向けのローカルタスク管理ツール。ブラウザベースのU
 
 `起動.bat` をダブルクリックするとサーバーが起動し、ブラウザでアプリが開きます。
 
+## スクリーンショット
+
+| プロジェクト一覧 | プロジェクト詳細 |
+|:---:|:---:|
+| ![プロジェクト一覧](screenshots/output/01-project-list.png) | ![プロジェクト詳細](screenshots/output/02-project-detail.png) |
+
+| タスク一覧 | タスク詳細 |
+|:---:|:---:|
+| ![タスク一覧](screenshots/output/03-task-list.png) | ![タスク詳細](screenshots/output/05-task-detail.png) |
+
+| タスク作成 | フィルター |
+|:---:|:---:|
+| ![タスク作成](screenshots/output/04-task-create-modal.png) | ![フィルター](screenshots/output/06-task-filtered.png) |
+
+| テンプレート | メモ |
+|:---:|:---:|
+| ![テンプレート](screenshots/output/07-template-list.png) | ![メモエディタ](screenshots/output/09-memo-editor.png) |
+
+| アラーム | ポモドーロ |
+|:---:|:---:|
+| ![アラーム](screenshots/output/10-alarm-list.png) | ![ポモドーロ](screenshots/output/11-pomodoro.png) |
+
 ## 機能一覧
 
 | 機能 | 説明 |
 |------|------|
-| プロジェクト | タスクをグループ化して管理。カラーラベル、README、フォルダリンク付き |
-| タスク | 親子階層、ステータス、優先度、担当者、期限、タグで管理 |
-| テンプレート | プロジェクト作成時にタスクを自動生成するテンプレート |
+| プロジェクト | タスクをグループ化して管理。カラーラベル、README、フォルダリンク付き。ドラッグ&ドロップで並び替え可能 |
+| タスク | 親子階層、ステータス、優先度、担当者、期限、タグで管理。カラムヘッダーのソートとドラッグ&ドロップの並び替えに対応 |
+| テンプレート | プロジェクト作成時にタスクを自動生成するテンプレート。テンプレート自体とテンプレート内のタスクをドラッグ&ドロップで並び替え可能 |
 | メモ | Markdownエディタ付きのメモ機能 |
 | アラーム | 指定日時に通知。日次・週次・月次の繰り返し設定可能 |
 | ポモドーロ | 作業/休憩タイマー。サイクル数やインターバルをカスタマイズ可能 |
@@ -128,9 +150,12 @@ Windows向けのローカルタスク管理ツール。ブラウザベースのU
 |----------|------|------|
 | GET | `/ping` | サーバー応答確認 |
 | GET/POST/PUT/DELETE | `/projects[/{id}]` | プロジェクトCRUD |
+| PUT | `/projects/reorder` | プロジェクトの並び替え (`[{id, sortOrder}, ...]`) |
 | GET/POST/PUT/DELETE | `/tasks[/{id}]` | タスクCRUD |
+| PUT | `/tasks/reorder` | タスクの並び替え (`[{id, sortOrder}, ...]`) |
 | GET/POST/PUT/DELETE | `/alarms[/{id}]` | アラームCRUD |
 | GET/POST/PUT/DELETE | `/memos[/{id}]` | メモCRUD |
 | GET/POST/PUT/DELETE | `/templates[/{id}]` | テンプレートCRUD |
+| PUT | `/templates/reorder` | テンプレートの並び替え (`[{id, sortOrder}, ...]`) |
 | GET/PUT | `/pomodoro/settings` | ポモドーロ設定 |
 | GET/PUT | `/pomodoro/state` | ポモドーロ状態 |
