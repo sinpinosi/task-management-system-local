@@ -13,7 +13,7 @@ Windows向けのローカルタスク管理ツール。ブラウザベースのU
 | プロジェクト | タスクをグループ化して管理。カラーラベル、README、フォルダリンク付き。ドラッグ&ドロップで並び替え可能 |
 | タスク | 親子階層、ステータス、優先度、担当者、期限、タグで管理。カラムヘッダーのソートとドラッグ&ドロップの並び替えに対応 |
 | テンプレート | プロジェクト作成時にタスクとREADMEを自動生成するテンプレート。Markdown README付き。テンプレート自体とテンプレート内のタスクをドラッグ&ドロップで並び替え可能 |
-| メモ | Markdownエディタ付きのメモ機能 |
+| メモ | Markdownファイルをフォルダツリーで管理するファイルブラウザ。全文検索、外部エディタで開く機能、フォルダ階層に対応 |
 | アラーム | 指定日時に通知。日次・週次・月次の繰り返し設定可能 |
 | ポモドーロ | 作業/休憩タイマー。サイクル数やインターバルをカスタマイズ可能 |
 | ゴミ箱 | 削除したタスク・プロジェクトを復元可能。完全削除も可能 |
@@ -23,9 +23,10 @@ Windows向けのローカルタスク管理ツール。ブラウザベースのU
 
 - **フロントエンド**: Vanilla JavaScript (ES6+), HTML5, CSS3
 - **バックエンド**: PowerShell 5.1 (Windows標準) HTTPサーバー
-- **データ保存**: JSONファイル (データベース不要)
+- **データ保存**: JSONファイル + Markdownファイル (データベース不要)
 - **通知**: Windows Toast通知 (WinRT API)
 - **アイコン**: Lucide Icons (ローカル同梱)
+- **動作要件**: Windows 標準機能のみ。完全オフラインで動作し、Node.js / npm / Python などの追加ランタイムは不要
 
 ## ファイル構成
 
@@ -45,13 +46,15 @@ Windows向けのローカルタスク管理ツール。ブラウザベースのU
 │   ├── tasks.js      #   タスク管理
 │   ├── alarm.js      #   アラーム管理
 │   ├── pomodoro.js   #   ポモドーロタイマー
-│   ├── memo.js       #   メモ管理
+│   ├── memo.js       #   メモ (ファイルブラウザ)
 │   ├── filters.js    #   タスクフィルタ
 │   ├── templates.js  #   テンプレート管理
 │   ├── archive.js    #   アーカイブ管理
 │   ├── trash.js      #   ゴミ箱管理
 │   ├── utils.js      #   ユーティリティ (Modal, Toast, 日付フォーマットなど)
-│   └── config.js     #   自動生成 (ポート番号)
+│   ├── config.js     #   自動生成 (ポート番号)
+│   └── vendor/       #   ベンダリング済み外部ライブラリ
+│       └── lucide.min.js  # Lucide Icons (ローカル同梱)
 ├── css/              # スタイルシート
 │   ├── reset.css     #   CSSリセット
 │   ├── theme.css     #   カラーテーマ変数
@@ -62,7 +65,7 @@ Windows向けのローカルタスク管理ツール。ブラウザベースのU
     ├── projects.json
     ├── tasks.json
     ├── templates.json
-    ├── memos.json
+    ├── memos-files/  # メモ用Markdownファイル置き場 (フォルダ階層可)
     └── personal/     # 個人データ (config.jsonで変更可能)
         ├── alarms.json
         └── pomodoro.json
@@ -75,11 +78,11 @@ Windows向けのローカルタスク管理ツール。ブラウザベースのU
   "port": 7890,
   "browser": "msedge",
   "dataDir": "./data",
+  "memosDir": "./data/memos-files",
   "dataPaths": {
     "projects":  "./data",
     "tasks":     "./data",
     "templates": "./data",
-    "memos":     "./data",
     "alarms":    "./data/personal",
     "pomodoro":  "./data/personal"
   }
@@ -91,6 +94,7 @@ Windows向けのローカルタスク管理ツール。ブラウザベースのU
 | `port` | サーバーのポート番号 | `7890` |
 | `browser` | 起動時に開くブラウザ (`msedge`, `chrome`, `firefox` など) | `msedge` |
 | `dataDir` | データ保存先のデフォルトディレクトリ。`dataPaths` で個別指定しない場合に使用 | `./data` |
+| `memosDir` | メモ (Markdownファイル) の保存先ディレクトリ | `./data/memos-files` |
 | `dataPaths` | データファイルの保存先を種別ごとに指定するオブジェクト | (下記参照) |
 
 ### dataPaths の種別
@@ -100,7 +104,6 @@ Windows向けのローカルタスク管理ツール。ブラウザベースのU
 | `projects` | プロジェクト情報 | 共有向き | `./data` |
 | `tasks` | タスク一覧 | 共有向き | `./data` |
 | `templates` | プロジェクトテンプレート | 共有向き | `./data` |
-| `memos` | メモ | 共有向き | `./data` |
 | `alarms` | アラーム設定 | 個人向き | `./data/personal` |
 | `pomodoro` | ポモドーロ設定・タイマー状態 | 個人向き | `./data/personal` |
 
@@ -134,7 +137,13 @@ Windows向けのローカルタスク管理ツール。ブラウザベースのU
 | GET/POST/PUT/DELETE | `/tasks[/{id}]` | タスクCRUD |
 | PUT | `/tasks/reorder` | タスクの並び替え (`[{id, sortOrder}, ...]`) |
 | GET/POST/PUT/DELETE | `/alarms[/{id}]` | アラームCRUD |
-| GET/POST/PUT/DELETE | `/memos[/{id}]` | メモCRUD |
+| GET | `/files/tree` | メモファイルのフォルダツリー取得 |
+| GET | `/files/read` | ファイル内容読み込み |
+| GET | `/files/search` | ファイル全文検索 |
+| POST | `/files/create` | ファイル・フォルダ作成 |
+| PUT | `/files/save` | ファイル保存 |
+| DELETE | `/files/delete` | ファイル削除 |
+| POST | `/files/open` | 外部アプリでファイルを開く |
 | GET/POST/PUT/DELETE | `/templates[/{id}]` | テンプレートCRUD |
 | PUT | `/templates/reorder` | テンプレートの並び替え (`[{id, sortOrder}, ...]`) |
 | GET/PUT | `/pomodoro/settings` | ポモドーロ設定 |
