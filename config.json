@@ -2,6 +2,7 @@
   "port": 7890,
   "browser": "msedge",
   "dataDir": "./data",
+  "memosDir": "./data/memos-files",
   "dataPaths": {
     "projects":  "./data",
     "tasks":     "./data",

@@ -51,11 +51,14 @@ const Api = (() => {
     updateAlarm(id, d)  { return request('PUT',    `/alarms/${id}`, d); },
     deleteAlarm(id)     { return request('DELETE', `/alarms/${id}`); },
 
-    // Memos
-    getMemos()          { return request('GET',    '/memos'); },
-    createMemo(d)       { return request('POST',   '/memos', d); },
-    updateMemo(id, d)   { return request('PUT',    `/memos/${id}`, d); },
-    deleteMemo(id)      { return request('DELETE', `/memos/${id}`); },
+    // Files (メモファイルブラウザ)
+    getFileTree()       { return request('GET',    '/files/tree'); },
+    readFile(path)      { return request('GET',    `/files/read?path=${encodeURIComponent(path)}`); },
+    searchFiles(q)      { return request('GET',    `/files/search?q=${encodeURIComponent(q)}`); },
+    createFile(d)       { return request('POST',   '/files/create', d); },
+    saveFile(d)         { return request('PUT',    '/files/save', d); },
+    deleteFile(d)       { return request('DELETE', '/files/delete', d); },
+    openFile(d)         { return request('POST',   '/files/open', d); },
 
     // Templates
     getTemplates()       { return request('GET',    '/templates'); },

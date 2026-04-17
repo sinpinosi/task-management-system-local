@@ -25,7 +25,7 @@ Windows向けのローカルタスク管理ツール。ブラウザベースのU
 - **バックエンド**: PowerShell 5.1 (Windows標準) HTTPサーバー
 - **データ保存**: JSONファイル (データベース不要)
 - **通知**: Windows Toast通知 (WinRT API)
-- **アイコン**: Lucide Icons (CDN)
+- **アイコン**: Lucide Icons (ローカル同梱)
 
 ## ファイル構成
 

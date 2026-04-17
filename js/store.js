@@ -6,31 +6,31 @@ const Store = (() => {
   let _projects  = [];
   let _tasks     = [];
   let _alarms    = [];
-  let _memos     = [];
+  let _fileTree  = [];
   let _templates = [];
   let _members   = [];
   let _tasksLoadedAt  = 0;
   let _alarmsLoadedAt = 0;
-  let _memosLoadedAt  = 0;
+  let _fileTreeLoadedAt = 0;
 
   async function loadAll() {
     try {
-      [_projects, _tasks, _alarms, _memos, _templates, _members] = await Promise.all([
+      [_projects, _tasks, _alarms, _fileTree, _templates, _members] = await Promise.all([
         Api.getProjects(),
         Api.getTasks(),
         Api.getAlarms(),
-        Api.getMemos(),
+        Api.getFileTree(),
         Api.getTemplates(),
         Api.getMembers()
       ]);
-      // 配列として保証
+      // ��列として保証
       _projects  = Array.isArray(_projects)  ? _projects  : [];
       _tasks     = Array.isArray(_tasks)     ? _tasks     : [];
       _tasksLoadedAt = Date.now();
       _alarms    = Array.isArray(_alarms)    ? _alarms    : [];
       _alarmsLoadedAt = Date.now();
-      _memos     = Array.isArray(_memos)     ? _memos     : [];
-      _memosLoadedAt = Date.now();
+      _fileTree  = Array.isArray(_fileTree)  ? _fileTree  : [];
+      _fileTreeLoadedAt = Date.now();
       _templates = Array.isArray(_templates) ? _templates : [];
       _members   = Array.isArray(_members)   ? _members   : [];
     } catch (e) {
@@ -252,27 +252,31 @@ const Store = (() => {
     _alarms = _alarms.filter(x => x.id !== id);
   }
 
-  // ---- Memos ----
-  function getMemos() { return [..._memos]; }
-  function getMemoById(id) { return _memos.find(m => m.id === id) || null; }
+  // ---- Files (メモファイルブラウザ) ----
+  function getFileTree() { return [..._fileTree]; }
 
-  async function createMemo(data) {
-    const m = await Api.createMemo(data);
-    _memos.push(m);
-    return m;
+  async function readFile(path) { return Api.readFile(path); }
+
+  async function createFile(path, content) {
+    const result = await Api.createFile({ path, content });
+    _fileTreeLoadedAt = 0;
+    return result;
   }
 
-  async function updateMemo(id, data) {
-    const m = await Api.updateMemo(id, data);
-    const idx = _memos.findIndex(x => x.id === id);
-    if (idx >= 0) _memos[idx] = m;
-    return m;
+  async function saveFile(path, content) {
+    const result = await Api.saveFile({ path, content });
+    _fileTreeLoadedAt = 0;
+    return result;
   }
 
-  async function deleteMemo(id) {
-    await Api.deleteMemo(id);
-    _memos = _memos.filter(x => x.id !== id);
+  async function deleteFile(path) {
+    const result = await Api.deleteFile({ path });
+    _fileTree = _fileTree.filter(f => f.path !== path);
+    _fileTreeLoadedAt = 0;
+    return result;
   }
+
+  async function openFile(path) { return Api.openFile({ path }); }
 
   // ---- キャッシュ再読み込み ----
   async function refreshTasks() {
@@ -291,12 +295,12 @@ const Store = (() => {
 
   function isTasksStale(maxAgeMs = 30000) { return Date.now() - _tasksLoadedAt > maxAgeMs; }
   function isAlarmsStale(maxAgeMs = 30000) { return Date.now() - _alarmsLoadedAt > maxAgeMs; }
-  function isMemosStale(maxAgeMs = 30000) { return Date.now() - _memosLoadedAt > maxAgeMs; }
+  function isFileTreeStale(maxAgeMs = 30000) { return Date.now() - _fileTreeLoadedAt > maxAgeMs; }
 
-  async function refreshMemos() {
-    _memos = await Api.getMemos();
-    _memos = Array.isArray(_memos) ? _memos : [];
-    _memosLoadedAt = Date.now();
+  async function refreshFileTree() {
+    _fileTree = await Api.getFileTree();
+    _fileTree = Array.isArray(_fileTree) ? _fileTree : [];
+    _fileTreeLoadedAt = Date.now();
   }
 
   return {
@@ -313,12 +317,12 @@ const Store = (() => {
     getTemplates, getTemplateById, createTemplate, updateTemplate, deleteTemplate, reorderTemplates,
     // alarms
     getAlarms, createAlarm, updateAlarm, deleteAlarm,
-    // memos
-    getMemos, getMemoById, createMemo, updateMemo, deleteMemo,
+    // files (メモファイルブラウザ)
+    getFileTree, readFile, createFile, saveFile, deleteFile, openFile,
     // members
     getMembers,
     // refresh
-    refreshTasks, refreshAlarms, refreshMemos,
-    isTasksStale, isAlarmsStale, isMemosStale
+    refreshTasks, refreshAlarms, refreshFileTree,
+    isTasksStale, isAlarmsStale, isFileTreeStale
   };
 })();

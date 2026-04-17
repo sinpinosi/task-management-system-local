@@ -48,6 +48,20 @@ $TasksFile     = Resolve-DataPath "tasks"     "tasks.json"
 $AlarmsFile    = Resolve-DataPath "alarms"    "alarms.json"
 $MemosFile     = Resolve-DataPath "memos"     "memos.json"
 $PomodoroFile  = Resolve-DataPath "pomodoro"  "pomodoro.json"
+
+# メモファイルブラウザ用ディレクトリ
+$MemosDir = ""
+if ($Config.PSObject.Properties.Name -contains "memosDir") {
+    $MemosDir = [string]$Config.memosDir
+}
+if (-not $MemosDir -or $MemosDir.Trim() -eq "") {
+    $MemosDir = Join-Path $ScriptDir "data\memos-files"
+}
+if (-not [System.IO.Path]::IsPathRooted($MemosDir)) {
+    $MemosDir = Join-Path $ScriptDir $MemosDir
+}
+$MemosDir = [System.IO.Path]::GetFullPath($MemosDir)
+if (-not (Test-Path $MemosDir)) { New-Item -ItemType Directory -Path $MemosDir -Force | Out-Null }
 $TemplatesFile = Resolve-DataPath "templates" "templates.json"
 $MembersFile   = Join-Path $ScriptDir "members.json"
 
@@ -366,11 +380,14 @@ function Handle-Request {
             return
         }
 
-        if ($resource -eq "memos") {
-            if     ($method -eq "GET")    { Api-GetAll  $res $MemosFile }
-            elseif ($method -eq "POST")   { Api-Create  $res $MemosFile $req "memo" }
-            elseif ($method -eq "PUT")    { Api-Update  $res $MemosFile $req $id }
-            elseif ($method -eq "DELETE") { Api-Delete  $res $MemosFile $id }
+        if ($resource -eq "files") {
+            if     ($method -eq "GET" -and $id -eq "tree")    { Api-FileTree    $res }
+            elseif ($method -eq "GET" -and $id -eq "read")    { Api-FileRead    $res $req }
+            elseif ($method -eq "GET" -and $id -eq "search")  { Api-FileSearch  $res $req }
+            elseif ($method -eq "POST" -and $id -eq "create") { Api-FileCreate  $res $req }
+            elseif ($method -eq "PUT" -and $id -eq "save")    { Api-FileSave    $res $req }
+            elseif ($method -eq "DELETE" -and $id -eq "delete"){ Api-FileDelete  $res $req }
+            elseif ($method -eq "POST" -and $id -eq "open")   { Api-FileOpen    $res $req }
             else   { Send-Response -Response $res -StatusCode 405 -Body '{"error":"Method Not Allowed"}' }
             return
         }
@@ -639,6 +656,264 @@ function Api-UpdateTask {
     Send-JsonResponse -Response $Response -Data $existing
 }
 
+# ============================================================
+# File browser API (メモファイルブラウザ)
+# ============================================================
+
+function Resolve-SafePath {
+    param([string]$RelPath)
+    if (-not $RelPath) { return $null }
+    # バックスラッシュに統一してから解決
+    $cleaned = $RelPath -replace '/', '\'
+    $full = [System.IO.Path]::GetFullPath((Join-Path $MemosDir $cleaned))
+    # パストラバーサル防止
+    if (-not $full.StartsWith($MemosDir, [System.StringComparison]::OrdinalIgnoreCase)) { return $null }
+    return $full
+}
+
+function Api-FileTree {
+    param($Response)
+    $results = New-Object 'System.Collections.Generic.List[object]'
+    try {
+        $items = Get-ChildItem -Path $MemosDir -Recurse -ErrorAction SilentlyContinue | Select-Object -First 500
+        foreach ($item in $items) {
+            $relPath = $item.FullName.Substring($MemosDir.Length + 1) -replace '\\', '/'
+            $dirPart = ""
+            $slashIdx = $relPath.LastIndexOf('/')
+            if ($slashIdx -ge 0) { $dirPart = $relPath.Substring(0, $slashIdx) }
+
+            if ($item.PSIsContainer) {
+                $entry = [PSCustomObject]@{
+                    path = $relPath
+                    name = $item.Name
+                    isDir = $true
+                }
+            } else {
+                $ext = $item.Extension.ToLower()
+                $preview = ""
+                if ($ext -eq ".md" -or $ext -eq ".txt") {
+                    try {
+                        $content = [System.IO.File]::ReadAllText($item.FullName, [System.Text.Encoding]::UTF8)
+                        if ($content.Length -gt 200) { $preview = $content.Substring(0, 200) }
+                        else { $preview = $content }
+                    } catch { }
+                }
+                $entry = [PSCustomObject]@{
+                    path = $relPath
+                    name = $item.Name
+                    dir = $dirPart
+                    isDir = $false
+                    ext = $ext
+                    size = $item.Length
+                    modifiedAt = $item.LastWriteTime.ToString("o")
+                    preview = $preview
+                }
+            }
+            [void]$results.Add($entry)
+        }
+    } catch {
+        Write-Host "[ERROR] Api-FileTree: $_"
+    }
+    Send-ArrayResponse -Response $Response -List $results
+}
+
+function Api-FileRead {
+    param($Response, $Request)
+    $query = $Request.Url.Query
+    $relPath = ""
+    if ($query -match '[?&]path=([^&]+)') {
+        $relPath = [System.Uri]::UnescapeDataString($Matches[1])
+    }
+    $fullPath = Resolve-SafePath $relPath
+    if (-not $fullPath -or -not (Test-Path $fullPath -PathType Leaf)) {
+        Send-Response -Response $Response -StatusCode 404 -Body '{"error":"File not found"}'
+        return
+    }
+    $fileInfo = Get-Item $fullPath
+    $ext = $fileInfo.Extension.ToLower()
+    $content = $null
+    if ($ext -eq ".md" -or $ext -eq ".txt") {
+        try {
+            $content = [System.IO.File]::ReadAllText($fullPath, [System.Text.Encoding]::UTF8)
+        } catch {
+            Send-Response -Response $Response -StatusCode 500 -Body "{`"error`":`"Read failed: $($_.Exception.Message)`"}"
+            return
+        }
+    }
+    $result = [PSCustomObject]@{
+        path = $relPath
+        name = $fileInfo.Name
+        ext = $ext
+        size = $fileInfo.Length
+        modifiedAt = $fileInfo.LastWriteTime.ToString("o")
+        content = $content
+    }
+    Send-JsonResponse -Response $Response -Data $result
+}
+
+function Api-FileSearch {
+    param($Response, $Request)
+    $query = $Request.Url.Query
+    $q = ""
+    if ($query -match '[?&]q=([^&]+)') {
+        $q = [System.Uri]::UnescapeDataString($Matches[1])
+    }
+    if (-not $q) { Send-ArrayResponse -Response $Response -List @(); return }
+
+    $results = New-Object 'System.Collections.Generic.List[object]'
+    try {
+        $files = Get-ChildItem -Path $MemosDir -Recurse -File -ErrorAction SilentlyContinue
+        foreach ($f in $files) {
+            if ($results.Count -ge 100) { break }
+            $relPath = $f.FullName.Substring($MemosDir.Length + 1) -replace '\\', '/'
+            $ext = $f.Extension.ToLower()
+
+            # ファイル名マッチ
+            if ($f.Name -like "*$q*") {
+                $entry = [PSCustomObject]@{
+                    path = $relPath; name = $f.Name; ext = $ext
+                    modifiedAt = $f.LastWriteTime.ToString("o")
+                    matchType = "filename"
+                }
+                [void]$results.Add($entry)
+                continue
+            }
+
+            # 内容マッチ（テキストファイルのみ、1MB以下）
+            if (($ext -eq ".md" -or $ext -eq ".txt") -and $f.Length -lt 1048576) {
+                try {
+                    $match = Select-String -Path $f.FullName -SimpleMatch $q -List -ErrorAction SilentlyContinue
+                    if ($match) {
+                        $matchLine = $match.Line
+                        if ($matchLine.Length -gt 200) { $matchLine = $matchLine.Substring(0, 200) }
+                        $entry = [PSCustomObject]@{
+                            path = $relPath; name = $f.Name; ext = $ext
+                            modifiedAt = $f.LastWriteTime.ToString("o")
+                            matchType = "content"
+                            matchLine = $matchLine
+                        }
+                        [void]$results.Add($entry)
+                    }
+                } catch { }
+            }
+        }
+    } catch {
+        Write-Host "[ERROR] Api-FileSearch: $_"
+    }
+    Send-ArrayResponse -Response $Response -List $results
+}
+
+function Api-FileCreate {
+    param($Response, $Request)
+    $body = Get-RequestBody $Request
+    if ($null -eq $body) { Send-Response -Response $Response -StatusCode 400 -Body '{"error":"Bad Request"}'; return }
+    $relPath = ""
+    if ($body.PSObject.Properties.Name -contains "path") { $relPath = [string]$body.path }
+    if (-not $relPath) {
+        $relPath = "memo-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".md"
+    }
+    $fullPath = Resolve-SafePath $relPath
+    if (-not $fullPath) {
+        Send-Response -Response $Response -StatusCode 400 -Body '{"error":"Invalid path"}'
+        return
+    }
+    if (Test-Path $fullPath) {
+        Send-Response -Response $Response -StatusCode 409 -Body '{"error":"File already exists"}'
+        return
+    }
+    $parentDir = [System.IO.Path]::GetDirectoryName($fullPath)
+    if (-not (Test-Path $parentDir)) { New-Item -ItemType Directory -Path $parentDir -Force | Out-Null }
+    $content = ""
+    if ($body.PSObject.Properties.Name -contains "content") { $content = [string]$body.content }
+    try {
+        [System.IO.File]::WriteAllText($fullPath, $content, [System.Text.Encoding]::UTF8)
+    } catch {
+        Send-Response -Response $Response -StatusCode 500 -Body "{`"error`":`"Write failed: $($_.Exception.Message)`"}"
+        return
+    }
+    $fileInfo = Get-Item $fullPath
+    $result = [PSCustomObject]@{
+        path = $relPath
+        name = $fileInfo.Name
+        ext = $fileInfo.Extension.ToLower()
+        size = $fileInfo.Length
+        modifiedAt = $fileInfo.LastWriteTime.ToString("o")
+    }
+    Send-JsonResponse -Response $Response -Data $result -StatusCode 201
+}
+
+function Api-FileSave {
+    param($Response, $Request)
+    $body = Get-RequestBody $Request
+    if ($null -eq $body) { Send-Response -Response $Response -StatusCode 400 -Body '{"error":"Bad Request"}'; return }
+    $relPath = ""
+    if ($body.PSObject.Properties.Name -contains "path") { $relPath = [string]$body.path }
+    $fullPath = Resolve-SafePath $relPath
+    if (-not $fullPath -or -not (Test-Path $fullPath -PathType Leaf)) {
+        Send-Response -Response $Response -StatusCode 404 -Body '{"error":"File not found"}'
+        return
+    }
+    $content = ""
+    if ($body.PSObject.Properties.Name -contains "content") { $content = [string]$body.content }
+    try {
+        $tmp = $fullPath + ".tmp"
+        [System.IO.File]::WriteAllText($tmp, $content, [System.Text.Encoding]::UTF8)
+        Move-Item -LiteralPath $tmp -Destination $fullPath -Force
+    } catch {
+        Send-Response -Response $Response -StatusCode 500 -Body "{`"error`":`"Save failed: $($_.Exception.Message)`"}"
+        return
+    }
+    $fileInfo = Get-Item $fullPath
+    $result = [PSCustomObject]@{
+        path = $relPath
+        name = $fileInfo.Name
+        ext = $fileInfo.Extension.ToLower()
+        size = $fileInfo.Length
+        modifiedAt = $fileInfo.LastWriteTime.ToString("o")
+    }
+    Send-JsonResponse -Response $Response -Data $result
+}
+
+function Api-FileDelete {
+    param($Response, $Request)
+    $body = Get-RequestBody $Request
+    if ($null -eq $body) { Send-Response -Response $Response -StatusCode 400 -Body '{"error":"Bad Request"}'; return }
+    $relPath = ""
+    if ($body.PSObject.Properties.Name -contains "path") { $relPath = [string]$body.path }
+    $fullPath = Resolve-SafePath $relPath
+    if (-not $fullPath -or -not (Test-Path $fullPath -PathType Leaf)) {
+        Send-Response -Response $Response -StatusCode 404 -Body '{"error":"File not found"}'
+        return
+    }
+    try {
+        Remove-Item -LiteralPath $fullPath -Force
+    } catch {
+        Send-Response -Response $Response -StatusCode 500 -Body "{`"error`":`"Delete failed: $($_.Exception.Message)`"}"
+        return
+    }
+    Send-JsonResponse -Response $Response -Data @{ deleted = $relPath }
+}
+
+function Api-FileOpen {
+    param($Response, $Request)
+    $body = Get-RequestBody $Request
+    if ($null -eq $body) { Send-Response -Response $Response -StatusCode 400 -Body '{"error":"Bad Request"}'; return }
+    $relPath = ""
+    if ($body.PSObject.Properties.Name -contains "path") { $relPath = [string]$body.path }
+    $fullPath = Resolve-SafePath $relPath
+    if (-not $fullPath -or -not (Test-Path $fullPath)) {
+        Send-Response -Response $Response -StatusCode 404 -Body '{"error":"File not found"}'
+        return
+    }
+    try {
+        Start-Process $fullPath
+    } catch {
+        Send-Response -Response $Response -StatusCode 500 -Body "{`"error`":`"Open failed: $($_.Exception.Message)`"}"
+        return
+    }
+    Send-JsonResponse -Response $Response -Data @{ opened = $true }
+}
+
 # Pomodoro handlers
 function Api-PomodoroGetSettings {
     param($Response)
@@ -820,7 +1095,7 @@ function Check-Pomodoro {
 # ============================================================
 # フロントエンド用 config.js を生成
 $ConfigJs = Join-Path $ScriptDir "js\config.js"
-$ConfigJsContent = "// Auto-generated from config.json - do not edit directly`nconst AppConfig = { port: $Port };"
+$ConfigJsContent = "// Auto-generated from config.json - do not edit directly`nconst AppConfig = { port: $Port, memosDir: `"$($MemosDir -replace '\\', '\\\\')`" };"
 [System.IO.File]::WriteAllText($ConfigJs, $ConfigJsContent, [System.Text.Encoding]::UTF8)
 
 Write-Host "Task Manager Server - http://localhost:$Port"
@@ -829,6 +1104,7 @@ Write-Host "  projects:  $ProjectsFile"
 Write-Host "  tasks:     $TasksFile"
 Write-Host "  alarms:    $AlarmsFile"
 Write-Host "  memos:     $MemosFile"
+Write-Host "  memosDir:  $MemosDir"
 Write-Host "  pomodoro:  $PomodoroFile"
 Write-Host "  templates: $TemplatesFile"
 
